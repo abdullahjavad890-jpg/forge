@@ -15,7 +15,7 @@ const DAY = 864e5, KEY = 'forge.v1', LB = 2.20462, MI = 1.609344;
 /* ---------- state ---------- */
 const defaults = () => ({
   v: 1,
-  settings: { name: '', unit: 'kg', dist: 'km', rest: 90, goal: 4, haptics: true, sound: true, autoRest: true, wake: true, hideInstall: false },
+  settings: { name: '', unit: 'kg', dist: 'km', rest: 90, goal: 4, haptics: true, sound: true, autoRest: true, wake: true, hideInstall: false, theme: 'auto', onboarded: false },
   custom: [],
   routines: ROUTINE_SEED.map(r => ({ id: uid(), name: r.name, items: r.items.map(([exId, sets]) => ({ exId, sets })) })),
   workouts: [],
@@ -148,9 +148,11 @@ document.addEventListener('touchstart', Sound.unlock, { passive: true });
 document.addEventListener('click', Sound.unlock);
 
 /* ---------- toast & confetti ---------- */
+const TOAST_EMOJI = { check: '✅', alert: '✋', trophy: '🏆', trash: '🗑️', bolt: '⚡', flame: '🔥', list: '📋', scale: '⚖️' };
 function toast(msg, icon = 'check') {
   const t = document.createElement('div');
-  t.className = 'toast'; t.innerHTML = `${I(icon)}<span>${esc(msg)}</span>`;
+  t.className = 'toast' + (icon === 'trophy' ? ' pr' : '');
+  t.innerHTML = `<span class="t-ic">${TOAST_EMOJI[icon] || icon}</span><span>${esc(msg)}</span>`;
   $('#toasts').appendChild(t);
   requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('in')));
   setTimeout(() => { t.classList.remove('in'); setTimeout(() => t.remove(), 450); }, 2600);
@@ -158,7 +160,7 @@ function toast(msg, icon = 'check') {
 function confetti(n = 120) {
   const c = $('#confetti'), x = c.getContext('2d'), dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
   c.width = W * dpr; c.height = H * dpr; x.scale(dpr, dpr); c.style.display = 'block';
-  const cols = ['#8b5cff', '#22d3ee', '#c6ff3d', '#ff5c7a', '#ffcf4d', '#ffffff'];
+  const cols = [...PLATE_COLORS, '#C5EA47', '#1E3B32'];
   const P = Array.from({ length: n }, () => ({ x: W / 2 + (Math.random() - .5) * 120, y: H * .38, vx: (Math.random() - .5) * 15, vy: -Math.random() * 15 - 5, s: Math.random() * 7 + 4, r: Math.random() * 6, vr: (Math.random() - .5) * .35, c: cols[Math.random() * cols.length | 0] }));
   const t0 = performance.now();
   (function f(t) {
@@ -339,11 +341,30 @@ function smooth(P) {
   }
   return d;
 }
-function ring(p, size = 116, sw = 11) {
-  const r = (size - sw) / 2, c = size / 2, id = 'rg' + (++gidN); p = clamp(p || 0, 0, 1);
-  return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+function ring(p, size = 116, sw = 11, color = 'var(--lime)') {
+  const r = (size - sw) / 2, c = size / 2; p = clamp(p || 0, 0, 1);
+  return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
     <circle cx="${c}" cy="${c}" r="${r}" class="ring-bg" stroke-width="${sw}"/>
-    <circle cx="${c}" cy="${c}" r="${r}" class="ring-fg ${p > 0 ? 'round' : ''}" stroke="url(#${id})" stroke-width="${sw}" pathLength="100" stroke-dasharray="${(p * 100).toFixed(2)} 100" transform="rotate(-90 ${c} ${c})"/></svg>`;
+    <circle cx="${c}" cy="${c}" r="${r}" class="ring-fg ${p > 0 ? 'round' : ''}" style="stroke:${color}" stroke-width="${sw}" pathLength="100" stroke-dasharray="${(p * 100).toFixed(2)} 100" transform="rotate(-90 ${c} ${c})"/></svg>`;
+}
+// Signature illustration: one bumper plate per workout this week, ghost plates for the rest of the goal.
+function barbellSVG(done, goal, cls = '') {
+  const n = Math.min(7, Math.max(goal, done)), W = 2 + 11, plates = [];
+  for (let i = 0; i < n; i++) {
+    const h = 86 - i * 7, y = (60 - h / 2).toFixed(1), on = i < done, st = `--pc:${PLATE_COLORS[i % PLATE_COLORS.length]};animation-delay:${200 + i * 110}ms`;
+    const p = x => `<rect class="bb-plate ${on ? 'on' : 'ghost'}" x="${x}" y="${y}" width="11" height="${h}" rx="3.5" style="${st}"/>`;
+    plates.push(p(77 - i * W) + p(172 + i * W));
+  }
+  const id = 'bbs' + (++gidN);
+  return `<svg class="bb ${cls}" viewBox="0 0 260 118" aria-hidden="true">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--bar-a)"/><stop offset="1" style="stop-color:var(--bar-b)"/></linearGradient></defs>
+    <ellipse class="bb-shadow" cx="130" cy="112" rx="104" ry="4"/>
+    <g class="bb-lift">
+      <rect x="2" y="56.5" width="256" height="7" rx="3.5" fill="url(#${id})"/>
+      <path d="M104 57v6M110 57v6M116 57v6M144 57v6M150 57v6M156 57v6" stroke="rgba(0,0,0,.18)" stroke-width="1"/>
+      <rect x="89" y="50" width="6" height="20" rx="2" fill="url(#${id})"/><rect x="165" y="50" width="6" height="20" rx="2" fill="url(#${id})"/>
+      ${plates.join('')}
+    </g></svg>`;
 }
 function lineChart(pts, o = {}) {
   if (!pts.length) return `<div class="chart-empty">${o.empty || 'Not enough data yet'}</div>`;
@@ -360,8 +381,8 @@ function lineChart(pts, o = {}) {
   const avg = o.avg && o.avg.length > 1 ? `<path class="avg" d="${smooth(o.avg.map(p => [X(p.x), Y(p.y)]))}"/>` : '';
   const dfmt = ts => fmtDate(ts, { month: 'short', day: 'numeric' });
   return `<svg class="chart" viewBox="0 0 ${W} ${H}">
-    <defs><linearGradient id="${id}a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22d3ee" stop-opacity=".32"/><stop offset="1" stop-color="#22d3ee" stop-opacity="0"/></linearGradient>
-    <linearGradient id="${id}s" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${W}" y2="0"><stop offset="0" stop-color="#8b5cff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+    <defs><linearGradient id="${id}a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--chart);stop-opacity:.22"/><stop offset="1" style="stop-color:var(--chart);stop-opacity:0"/></linearGradient>
+    <linearGradient id="${id}s" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${W}" y2="0"><stop offset="0" style="stop-color:var(--chart2)"/><stop offset="1" style="stop-color:var(--chart)"/></linearGradient></defs>
     ${grid}<path class="area" d="${area}" fill="url(#${id}a)"/>${avg}<path class="line" d="${line}" pathLength="1" stroke="url(#${id}s)"/>
     <circle class="dot" cx="${lp[0].toFixed(1)}" cy="${lp[1].toFixed(1)}" r="4.5"/>
     <text x="0" y="${T - 8}">${f(Math.max(...ys))}</text><text x="${W}" y="${T - 8}" text-anchor="end" class="hi">Now ${f(pts[pts.length - 1].y)}</text>
@@ -369,12 +390,12 @@ function lineChart(pts, o = {}) {
 }
 function barChart(items, o = {}) {
   const W = 340, H = o.h || 150, T = 18, B = 20, n = items.length, gap = 8, bw = (W - gap * (n - 1)) / n;
-  const max = Math.max(1, ...items.map(i => i.v)), id = 'bc' + (++gidN), f = o.fmt || fmtN;
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#8b5cff"/></linearGradient></defs>
+  const max = Math.max(1, ...items.map(i => i.v)), f = o.fmt || fmtN;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}">
   ${items.map((it, i) => {
     const h = Math.max(it.v ? 4 : 2, it.v / max * (H - T - B)), x = i * (bw + gap), y = H - B - h, cx = (x + bw / 2).toFixed(1);
     const lbl = it.v && (it.hi || it.v === max) ? `<text x="${cx}" y="${(y - 6).toFixed(1)}" text-anchor="middle" class="${it.hi ? 'hi' : ''}">${f(it.v)}</text>` : '';
-    return `<rect class="bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(7, bw / 3).toFixed(1)}" style="animation-delay:${i * 45}ms${it.hi ? `;fill:url(#${id})` : ''}"/>${lbl}<text x="${cx}" y="${H - 5}" text-anchor="middle">${it.label}</text>`;
+    return `<rect class="bar ${it.hi ? 'hi' : ''}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(8, bw / 3).toFixed(1)}" style="animation-delay:${i * 45}ms"/>${lbl}<text x="${cx}" y="${H - 5}" text-anchor="middle">${it.label}</text>`;
   }).join('')}</svg>`;
 }
 function heatmap(weeks = 18) {
@@ -404,8 +425,10 @@ function delta(a, b, mode) {
 }
 const tile = (l, v, f = '') => `<div class="tile"><small>${l}</small><b>${v}</b>${f ? `<div class="tile-f">${f}</div>` : ''}</div>`;
 const tileC = (l, raw, fmt, suffix = '') => `<div class="tile"><small>${l}</small><b><span data-count="${raw}" data-fmt="${fmt}">${FMT[fmt](raw)}</span>${suffix}</b></div>`;
-const emptyState = (icon, title, text, btn = '') => `<div class="empty"><div class="empty-ic">${I(icon)}</div><b>${title}</b><p>${text}</p>${btn}</div>`;
-const row = (icon, label, val, action, attrs = '', cls = '') => `<div class="row ${cls}" data-a="${action}" ${attrs}><span class="row-ic">${I(icon)}</span><span class="row-l">${label}</span>${val !== '' ? `<span class="row-v">${val}</span>` : ''}${I('right')}</div>`;
+const EMPTY_EMOJI = { clock: '🗓️', chart: '📈', scale: '⚖️', dumbbell: '🏋️', list: '📋' };
+const emptyState = (icon, title, text, btn = '') => `<div class="empty"><span class="big-emoji">${EMPTY_EMOJI[icon] || icon}</span><b>${title}</b><p>${text}</p>${btn}</div>`;
+const etile = (m, cls = '') => `<span class="etile ${cls}" style="--mc:${MUSCLES[m] || '#999'}">${MEMOJI[m] || '•'}</span>`;
+const row = (icon, label, val, action, attrs = '', cls = '') => `<div class="row ${cls}" data-a="${action}" ${attrs}><span class="row-ic">${ICONS[icon] ? I(icon) : icon}</span><span class="row-l">${label}</span>${val !== '' ? `<span class="row-v">${val}</span>` : ''}${I('right')}</div>`;
 const muscleDots = items => [...new Set(items.map(id => ex(id).muscle))].map(m => `<i style="--mc:${MUSCLES[m]}"></i>`).join('');
 function lastDone(r) {
   for (let i = S.workouts.length - 1; i >= 0; i--) if (S.workouts[i].routineId === r.id || S.workouts[i].name === r.name) return S.workouts[i].start;
@@ -419,65 +442,82 @@ let PK = { q: '', m: 'All', sel: [], cb: null, mode: 'multi' };
 function installCard() {
   const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
   if (standalone || S.settings.hideInstall) return '';
-  return `<div class="card install"><div>${I('download')}</div><div><b>Install Forge</b><small>In Safari tap <b>Share</b> then <b>Add to Home Screen</b> for the full-screen app and safe, permanent storage.</small></div><button class="icon-btn sm" data-a="hideInstall">${I('x')}</button></div>`;
+  return `<div class="install"><span>📲</span><div><b>Put Forge on your Home Screen</b><small>In Safari tap Share, then Add to Home Screen. It opens like a real app and keeps your data safe.</small></div><button class="icon-btn sm" data-a="hideInstall" aria-label="Dismiss">${I('x')}</button></div>`;
 }
+function routineMuscle(r) {
+  const c = {};
+  r.items.forEach(it => { const m = ex(it.exId).muscle; c[m] = (c[m] || 0) + it.sets; });
+  const top = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
+  return top ? top[0] : 'Legs';
+}
+const heroMsg = (c, g) => !c ? 'Empty bar. Load your first plate this week.' : c < g ? `${g - c} more workout${g - c > 1 ? 's' : ''} to fully load the bar.` : c === g ? 'Fully loaded. Weekly goal done 💪' : 'Over-achiever. Bonus plates earned.';
 
 function vHome() {
   const now = Date.now(), ws = weekStart(now), a = weekAgg(ws), b = weekAgg(addDays(ws, -7)), g = S.settings.goal;
   const lastWs = addDays(ws, -7), lastScore = weekScore(b, weekAgg(addDays(ws, -14)));
   const h = new Date().getHours();
-  const greet = h < 5 ? 'Late night grind' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  const streak = weekStreak();
-  const dots = [...Array(7)].map((_, i) => { const k = dayKey(addDays(ws, i)); return `<div class="dd ${a.dayKeys.has(k) ? 'on' : ''} ${k === dayKey(now) ? 'today' : ''}" style="animation-delay:${i * 50}ms"><i></i><span>${'MTWTFSS'[i]}</span></div>`; }).join('');
-  const hs = (l, v, u, d) => `<div class="hs"><small>${l}</small><div><b>${v}</b>${u ? `<i>${u}</i>` : ''}</div>${d}</div>`;
-  const recent = S.workouts.slice(-3).reverse();
+  const greet = h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  const streak = weekStreak(), vp = pct(a.vol, b.vol);
+  const dots = [...Array(7)].map((_, i) => { const k = dayKey(addDays(ws, i)), on = a.dayKeys.has(k); return `<div class="dd ${on ? 'on' : ''} ${k === dayKey(now) ? 'today' : ''}"><i style="animation-delay:${400 + i * 60}ms">${on ? '✓' : ''}</i><span>${'MTWTFSS'[i]}</span></div>`; }).join('');
+  const recent = S.workouts.slice(-4).reverse();
   const bw = S.body[S.body.length - 1];
   return `
+  <header class="top"><div><p class="eyebrow">${fmtDate(now, { weekday: 'long', day: 'numeric', month: 'long' })}</p><h1>${greet}${S.settings.name ? ', ' + esc(S.settings.name) : ''}</h1></div>
+    ${streak ? `<span class="streak" title="Weeks in a row you hit your goal">🔥 ${streak}<small>wk</small></span>` : ''}</header>
   ${installCard()}
-  <header class="top"><div><p class="eyebrow">${fmtDate(now, { weekday: 'long', month: 'long', day: 'numeric' })}</p><h1>${greet}${S.settings.name ? ',<br>' + esc(S.settings.name) : ''}</h1></div>
-    <div class="streak ${streak ? 'hot' : ''}">${I('flame')}<b>${streak}</b><small>wk streak</small></div></header>
-  ${S.active ? `<button class="card resume" data-a="woOpen"><span class="pulse"></span><div><small>Workout in progress</small><b>${esc(S.active.name)}</b></div><span class="mono" data-clock></span>${I('right')}</button>` : ''}
-  <section class="card hero">
-    <div class="hero-ring">${ring(a.count / g)}<div class="ring-c"><b data-count="${a.count}">${a.count}</b><small>of ${g} this week</small></div></div>
-    <div class="hero-stats">${hs('Volume', fmtVol(a.vol), unit(), delta(a.vol, b.vol))}${hs('Time', fmtDur(a.dur), '', delta(a.dur, b.dur))}${hs('Sets', a.sets, '', delta(a.sets, b.sets))}</div>
+  ${S.active ? `<button class="resume" data-a="woOpen"><span class="pulse"></span><div><small>Workout in progress</small><b>${esc(S.active.name)}</b></div><span class="mono" data-clock></span><span class="chev">›</span></button>` : ''}
+  <section class="hero" data-a="lift">
+    <div class="hero-top"><div><p class="hero-label">This week</p><p class="hero-num"><span data-count="${a.count}">${a.count}</span><small> / ${g} workouts</small></p></div>
+      ${b.vol ? `<span class="pill ${vp >= 0 ? 'up' : 'down'}">${vp >= 0 ? '▲' : '▼'} ${Math.abs(vp)}% volume</span>` : ''}</div>
+    ${barbellSVG(a.count, g)}
+    <p class="hero-msg">${heroMsg(a.count, g)}</p>
     <div class="days">${dots}</div>
+    <div class="hero-split"><div><span>Volume</span><b>${fmtVol(a.vol)}<i>${unit()}</i></b></div><div><span>Time</span><b>${fmtDur(a.dur)}</b></div><div><span>Sets</span><b>${a.sets}</b></div></div>
   </section>
-  <div class="card review-cta" data-a="review" data-ws="${lastWs}">
+  <section class="card review-cta" data-a="review" data-ws="${lastWs}">
     <div class="grade">${lastScore.grade}</div>
-    <div class="rc-main"><b>Weekly Review</b><small>Last week: ${lastScore.label.toLowerCase()} · ${b.count} workout${b.count === 1 ? '' : 's'}</small><span class="rc-sub" data-a="review" data-ws="${ws}">See this week so far ›</span></div>
-    ${I('right')}
-  </div>
-  <div class="sec-h"><h2>Start training</h2><button class="link" data-a="newRoutine">+ Routine</button></div>
-  <button class="btn-primary big" data-a="startEmpty">${I('play')} Start empty workout</button>
-  <div class="hscroll">${S.routines.map(r => {
-    const ld = lastDone(r);
-    return `<div class="r-card" data-a="startRoutine" data-id="${r.id}"><div class="rc-top"><b>${esc(r.name)}</b><button class="icon-btn sm" data-a="editRoutine" data-id="${r.id}">${I('dots')}</button></div><small>${r.items.map(it => esc(ex(it.exId).name)).join(' · ')}</small><div class="rc-f"><span class="mdots">${muscleDots(r.items.map(i => i.exId))}</span><span>${ld ? relDay(ld) : 'New'}</span></div></div>`;
-  }).join('')}<div class="r-card add" data-a="newRoutine">${I('plus')}<small>New routine</small></div></div>
-  ${recent.length ? `<div class="sec-h"><h2>Recent</h2><button class="link" data-a="tab" data-tab="history">See all</button></div>${recent.map(wCard).join('')}` : ''}
-  <div class="sec-h"><h2>Body weight</h2><button class="link" data-a="logBody">+ Log</button></div>
-  <div class="card" data-a="tab" data-tab="progress" data-prog="body">${bw ? `<div class="big-num" style="font-size:34px">${fmtW(bw.w)}<i>${unit()} · ${relDay(bw.d)}</i></div>${lineChart(S.body.slice(-20).map(e => ({ x: e.d, y: kgTo(e.w) })), { h: 110 })}` : `<p class="muted">Log your weight to see the trend here.</p>`}</div>`;
+    <div class="rc-main"><b>Weekly review</b><small>Last week: ${lastScore.label} · ${b.count} workout${b.count === 1 ? '' : 's'}</small><span class="rc-sub" data-a="review" data-ws="${ws}">This week so far ›</span></div>
+    <span class="chev">›</span>
+  </section>
+  <section>
+    <div class="sec-h"><h2>Start training</h2><button class="link" data-a="newRoutine">+ Routine</button></div>
+    <div class="hscroll">${S.routines.map(r => {
+      const ld = lastDone(r), m = routineMuscle(r);
+      return `<div class="r-card" style="--c:${MUSCLES[m]}" data-a="startRoutine" data-id="${r.id}"><div class="rc-top"><span class="rc-emoji">${MEMOJI[m]}</span><button class="icon-btn" data-a="editRoutine" data-id="${r.id}" aria-label="Edit routine">${I('dots')}</button></div><b>${esc(r.name)}</b><small>${r.items.length} exercises · ${ld ? relDay(ld) : 'new'}</small></div>`;
+    }).join('')}<div class="r-card add" data-a="newRoutine"><span>+</span>New routine</div></div>
+    <button class="btn-primary big" data-a="startEmpty">${I('play')} Start empty workout</button>
+  </section>
+  <section>
+    <div class="sec-h"><h2>Recent</h2>${recent.length ? '<button class="link" data-a="tab" data-tab="history">See all</button>' : ''}</div>
+    ${recent.length ? `<div class="list">${recent.map(wCard).join('')}</div>` : emptyState('🪶', 'Nothing logged yet', 'Tap the lime + below or pick a routine above to start your first session.')}
+  </section>
+  <section>
+    <div class="sec-h"><h2>Body weight</h2><button class="link" data-a="logBody">+ Log</button></div>
+    <div class="card" data-a="tab" data-tab="progress" data-prog="body">${bw ? `<div class="big-num" style="font-size:36px">${fmtW(bw.w)}<i>${unit()} · ${relDay(bw.d)}</i></div>${lineChart(S.body.slice(-20).map(e => ({ x: e.d, y: kgTo(e.w) })), { h: 110 })}` : `<p class="muted">⚖️ Log your weight a few times a week and Forge draws the trend.</p>`}</div>
+  </section>`;
 }
 
 function wCard(w) {
   const st = wStats(w), d = new Date(w.start), total = Object.values(st.muscles).reduce((a, b) => a + b, 0) || 1;
   const seg = Object.entries(st.muscles).sort((a, b) => b[1] - a[1]).map(([m, n]) => `<i style="--mc:${MUSCLES[m]};flex:${n / total}"></i>`).join('');
-  const more = w.exercises.length > 3 ? ` +${w.exercises.length - 3}` : '';
-  return `<div class="card w-card" data-a="wDetail" data-id="${w.id}"><div class="w-date"><b>${d.getDate()}</b><small>${fmtDate(w.start, { weekday: 'short' })}</small></div>
-    <div class="w-main"><b>${esc(w.name)}</b><div class="w-meta">${I('clock')} ${[fmtDur(st.dur), st.vol ? `${fmtVol(st.vol)} ${unit()}` : '', st.dist ? `${fmtD(st.dist)} ${dunit()}` : '', `${st.sets} set${st.sets === 1 ? '' : 's'}`].filter(Boolean).join(' · ')} ${(w.prs || []).length ? `<span class="pr-pill">${I('trophy')} ${w.prs.length}</span>` : ''}</div>
-    <div class="mbar">${seg}</div><div class="w-ex">${w.exercises.slice(0, 3).map(e => esc(ex(e.exId).name)).join(' · ')}${more}</div></div></div>`;
+  const meta = [fmtDur(st.dur), st.vol ? `${fmtVol(st.vol)} ${unit()}` : '', st.dist ? `${fmtD(st.dist)} ${dunit()}` : '', `${st.sets} set${st.sets === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+  return `<div class="w-card" data-a="wDetail" data-id="${w.id}"><div class="w-date"><b>${d.getDate()}</b><small>${fmtDate(w.start, { weekday: 'short' })}</small></div>
+    <div class="w-main"><b>${esc(w.name)}</b><div class="w-meta">${meta}</div><div class="mbar">${seg}</div></div>
+    ${(w.prs || []).length ? `<span class="pr-pill">🏆 ${w.prs.length}</span>` : '<span class="chev">›</span>'}</div>`;
 }
 
 function vHistory() {
   const list = S.workouts.slice().reverse();
   const head = `<header class="top"><div><p class="eyebrow">${list.length} workout${list.length === 1 ? '' : 's'} logged</p><h1>History</h1></div></header>`;
   if (!list.length) return head + emptyState('clock', 'No workouts yet', 'Every workout you finish lands here with full details.', `<button class="btn-primary" data-a="startMenu">${I('play')} Start a workout</button>`);
-  let html = '', cur = '';
+  const groups = [];
   for (const w of list) {
     const m = fmtDate(w.start, { month: 'long', year: 'numeric' });
-    if (m !== cur) { cur = m; html += `<h3 class="month">${m}</h3>`; }
-    html += wCard(w);
+    if (!groups.length || groups[groups.length - 1].m !== m) groups.push({ m, ws: [] });
+    groups[groups.length - 1].ws.push(w);
   }
-  return head + `<div class="card"><div class="card-h"><b>Last 18 weeks</b><span class="muted sm">${S.workouts.filter(w => w.start >= addDays(Date.now(), -126)).length} sessions</span></div>${heatmap()}</div>` + html;
+  return head + `<section class="card"><div class="card-h"><b>Last 18 weeks</b><span class="muted sm">${S.workouts.filter(w => w.start >= addDays(Date.now(), -126)).length} sessions</span></div>${heatmap()}</section>`
+    + groups.map(g => `<section><p class="month"><span>${g.m}</span><span>${g.ws.length} workout${g.ws.length === 1 ? '' : 's'}</span></p><div class="list">${g.ws.map(wCard).join('')}</div></section>`).join('');
 }
 
 function segCtl(key, opts, cur) {
@@ -507,7 +547,7 @@ function vOverview() {
   return `<div class="fade-in">
   <div class="tiles">${tileC('Workouts', W.length, 'int')}${tileC('Time trained', dur, 'dur')}${tileC('Total volume', vol, 'vol', ` <i class="muted sm">${unit()}</i>`)}${tileC('Personal records', prs, 'int')}</div>
   <div class="card"><div class="card-h"><b>Weekly volume</b><span class="muted sm">${unit()}</span></div>${barChart(weeks.map(({ s, a }, i) => ({ label: fmtDate(s, { month: 'numeric', day: 'numeric' }), v: kgTo(a.vol), hi: i === 9 })), { fmt: v => fmtVol(toKg(v)) })}</div>
-  <div class="card"><div class="card-h"><b>Weekly reviews</b>${I('sparkle')}</div><div class="list" style="margin:0 -14px">${revs}</div></div>
+  <section><div class="sec-h"><h2>Weekly reviews</h2></div><div class="list">${revs}</div></section>
   <div class="card"><div class="card-h"><b>Consistency</b><span class="muted sm">last 18 weeks</span></div>${heatmap()}<div class="legend"><span><i style="background:rgba(139,92,255,.35)"></i>&lt;30m</span><span><i style="background:rgba(91,140,255,.85)"></i>60m+</span><span><i style="background:#22d3ee"></i>90m+</span></div></div>
   <div class="card"><div class="card-h"><b>Muscle split</b><span class="muted sm">sets, last 30 days</span></div>${muscleBars(m30)}</div>
   </div>`;
@@ -527,7 +567,7 @@ function vBody() {
     ${lineChart(pts, { avg })}<div class="legend"><span><i class="lg-line"></i>Weigh-ins</span><span><i class="lg-avg"></i>7-entry average</span></div></div>
   ${btn}
   <div class="sec-h"><h2>Entries</h2></div>
-  <div class="card list" style="padding:0">${B.slice().reverse().slice(0, 40).map((e, i) => {
+  <div class="list">${B.slice().reverse().slice(0, 40).map((e, i) => {
     const idx = B.length - 1 - i, prev = B[idx - 1], d = prev ? e.w - prev.w : 0;
     return `<div class="row"><span class="row-l">${fmtDate(e.d, { weekday: 'short', month: 'short', day: 'numeric' })}${prev ? `<small>${d > 0 ? '+' : ''}${fmtW(d)} ${unit()}</small>` : ''}</span><b class="mono">${fmtW(e.w)} ${unit()}</b><button class="icon-btn sm" data-a="delBody" data-i="${idx}">${I('trash')}</button></div>`;
   }).join('')}</div></div>`;
@@ -543,7 +583,7 @@ function vLifts() {
   const list = Object.values(map).sort((a, b) => b.last - a.last);
   if (!list.length) return `<div class="fade-in">${emptyState('dumbbell', 'No exercises logged', 'Your lifts, estimated 1RMs and rep records appear here once you train.')}</div>`;
   const best = m => m.x.type === 'w' ? `${fmtW(m.best)} ${unit()}<small> e1RM</small>` : m.x.type === 'bw' ? `${m.best} reps` : m.x.type === 'c' ? `${fmtD(m.best)} ${dunit()}` : fmtClock(m.best);
-  return `<div class="fade-in"><div class="card list" style="padding:0">${list.map(m => `<div class="row" data-a="exInfo" data-id="${m.x.id}" style="--mc:${MUSCLES[m.x.muscle]}"><span class="pk-dot"></span><span class="row-l">${esc(m.x.name)}<small>${m.n} session${m.n === 1 ? '' : 's'} · ${relDay(m.last)}</small></span><span class="row-v">${best(m)}</span>${I('right')}</div>`).join('')}</div></div>`;
+  return `<div class="fade-in"><div class="list">${list.map(m => `<div class="row" data-a="exInfo" data-id="${m.x.id}" >${etile(m.x.muscle, 'sm')}<span class="row-l">${esc(m.x.name)}<small>${m.n} session${m.n === 1 ? '' : 's'} · ${relDay(m.last)}</small></span><span class="row-v">${best(m)}</span>${I('right')}</div>`).join('')}</div></div>`;
 }
 
 function vMore() {
@@ -552,27 +592,28 @@ function vMore() {
   const tg = k => `<button class="tgl ${s[k] ? 'on' : ''}" data-a="toggle" data-k="${k}" aria-label="${k}"></button>`;
   const ms = (k, opts) => `<div class="mseg">${opts.map(v => `<button class="${s[k] === v ? 'on' : ''}" data-a="setOpt" data-k="${k}" data-v="${v}">${v}</button>`).join('')}</div>`;
   const stp = (k, v) => `<div class="stp"><button data-a="step" data-k="${k}" data-d="-1">${I('minus')}</button><span id="stp-${k}">${v}</span><button data-a="step" data-k="${k}" data-d="1">${I('plus')}</button></div>`;
-  const line = (icon, label, ctl) => `<div class="row"><span class="row-ic">${I(icon)}</span><span class="row-l">${label}</span>${ctl}</div>`;
+  const line = (icon, label, ctl) => `<div class="row"><span class="row-ic">${icon}</span><span class="row-l">${label}</span>${ctl}</div>`;
   return `<header class="top"><div><p class="eyebrow">Profile & settings</p><h1>More</h1></div></header>
   <section class="card profile"><div class="avatar">${esc(init)}</div><div style="flex:1;min-width:0"><input data-f="name" value="${esc(s.name)}" placeholder="Your name" maxlength="24"><small>${S.workouts.length} workouts${first ? ' since ' + fmtDate(first.start, { month: 'short', year: 'numeric' }) : ''}</small></div></section>
-  <div class="sec-h"><h2>Library</h2></div>
-  <div class="card list" style="padding:0">${row('list', 'Routines', S.routines.length, 'routines')}${row('dumbbell', 'Exercises', allEx().length, 'library')}</div>
-  <div class="sec-h"><h2>Tools</h2></div>
-  <div class="card list" style="padding:0">${row('plate', 'Plate calculator', '', 'plates')}${row('calc', '1RM calculator', '', 'orm')}${row('sparkle', 'Weekly review', '', 'review', `data-ws="${weekStart(Date.now())}"`)}</div>
-  <div class="sec-h"><h2>Preferences</h2></div>
-  <div class="card list" style="padding:0">
-    ${line('scale', 'Weight unit', ms('unit', ['kg', 'lb']))}
-    ${line('cardio', 'Distance unit', ms('dist', ['km', 'mi']))}
-    ${line('timer', 'Default rest', stp('rest', fmtClock(s.rest)))}
-    ${line('flame', 'Weekly goal', stp('goal', s.goal + ' / wk'))}
-    ${line('refresh', 'Auto-start rest timer', tg('autoRest'))}
-    ${line('bolt', 'Haptics', tg('haptics'))}
-    ${line('heart', 'Sounds', tg('sound'))}
-    ${line('sparkle', 'Keep screen awake', tg('wake'))}
+  <section><p class="group-label">Library</p></section>
+  <div class="list">${row('📋', 'Routines', S.routines.length, 'routines')}${row('🏋️', 'Exercises', allEx().length, 'library')}</div>
+  <section><p class="group-label">Tools</p></section>
+  <div class="list">${row('🧮', 'Plate calculator', '', 'plates')}${row('📐', '1RM calculator', '', 'orm')}${row('📝', 'Weekly review', '', 'review', `data-ws="${weekStart(Date.now())}"`)}</div>
+  <section><p class="group-label">Preferences</p></section>
+  <div class="list">
+    ${line('🌗', 'Appearance', ms('theme', ['auto', 'light', 'dark']))}
+    ${line('⚖️', 'Weight unit', ms('unit', ['kg', 'lb']))}
+    ${line('📏', 'Distance unit', ms('dist', ['km', 'mi']))}
+    ${line('⏱️', 'Default rest', stp('rest', fmtClock(s.rest)))}
+    ${line('🎯', 'Weekly goal', stp('goal', s.goal + ' / wk'))}
+    ${line('🔁', 'Auto-start rest timer', tg('autoRest'))}
+    ${line('📳', 'Haptics', tg('haptics'))}
+    ${line('🔔', 'Sounds', tg('sound'))}
+    ${line('☀️', 'Keep screen awake', tg('wake'))}
   </div>
-  <div class="sec-h"><h2>Your data</h2></div>
-  <div class="card list" style="padding:0">${row('download', 'Export backup', 'JSON', 'exportJson')}${row('file', 'Export spreadsheet', 'CSV', 'exportCsv')}${row('upload', 'Restore backup', '', 'importJson')}${row('trash', '<span class="danger">Erase all data</span>', '', 'reset')}</div>
-  <p class="foot">Forge keeps everything on this iPhone. No account, no cloud, no cost. Export a backup every few weeks so your history is safe.</p>`;
+  <section><p class="group-label">Your data</p></section>
+  <div class="list">${row('💾', 'Export backup', 'JSON', 'exportJson')}${row('📊', 'Export spreadsheet', 'CSV', 'exportCsv')}${row('📥', 'Restore backup', '', 'importJson')}${row('🗑️', '<span class="danger">Erase all data</span>', '', 'reset')}</div>
+  <p class="foot">Everything stays on this phone. No account, no cloud, no cost.</p>`;
 }
 
 const VIEWS = { home: vHome, history: vHistory, progress: vProgress, more: vMore };
@@ -587,6 +628,7 @@ function render(anim) {
 }
 
 /* ---------- review ---------- */
+const INS_EMOJI = { moon: '😴', trophy: '🏆', bolt: '⚡', trendUp: '📈', trendDown: '📉', check: '👌', alert: '⚖️', dumbbell: '💪', timer: '⏱️', heart: '❤️', scale: '🪶' };
 function insights(a, b, live) {
   const g = S.settings.goal, out = [];
   if (!a.count) return [['moon', live ? 'No sessions logged yet this week. Plenty of time to get one in.' : 'No workouts this week. Recovery matters, so treat it as a reset and get back to it.']];
@@ -624,7 +666,7 @@ function vReview() {
   ].map(([l, x, y, fx, fy, m]) => tile(l, fx, `${delta(x, y, m)}<span>last wk ${fy}</span>`)).join('');
   const mx = Math.max(1, ...a.dayMin, ...b.dayMin);
   const days = a.dayMin.map((m, i) => `<div class="dc"><div class="dc-bars"><i class="pv" style="height:${b.dayMin[i] / mx * 100}%"></i><i class="cu" style="height:${m / mx * 100}%;animation-delay:${i * 50}ms"></i></div><span>${'MTWTFSS'[i]}</span></div>`).join('');
-  const prs = a.prList.slice(0, 6).map(p => `<div class="pr-row">${I('trophy')}<b>${esc(ex(p.exId).name)}</b><span>${prTxt(p)}</span></div>`).join('');
+  const prs = a.prList.slice(0, 6).map(p => `<div class="pr-row"><span>🏆</span><b>${esc(ex(p.exId).name)}</b><span>${prTxt(p)}</span></div>`).join('');
   return `<div class="rv-nav"><button class="icon-btn sm" data-a="revNav" data-d="-1">${I('left')}</button><div><h2>Weekly Review</h2><small class="muted">${rangeTxt(ws)}${live ? ' · in progress' : ''}</small></div><button class="icon-btn sm" data-a="revNav" data-d="1" ${live ? 'disabled' : ''}>${I('right')}</button></div>
   <div class="card score"><div class="hero-ring" style="width:108px;height:108px">${ring(sc.s / 100, 108, 10)}<div class="ring-c"><b>${sc.grade}</b><small>${sc.s}/100</small></div></div>
     <div><small class="muted">${live ? 'So far' : 'Verdict'}</small><h3>${sc.label}</h3><p class="muted sm">${a.count}/${S.settings.goal} workouts · ${a.dayKeys.size} active days · ${a.prs} PR${a.prs === 1 ? '' : 's'}</p></div></div>
@@ -632,7 +674,7 @@ function vReview() {
   <div class="card"><div class="card-h"><b>Training minutes</b><div class="legend" style="margin:0"><span><i class="lg-cur"></i>This</span><span><i class="lg-prev"></i>Last</span></div></div><div class="dchart">${days}</div></div>
   <div class="card"><div class="card-h"><b>Sets per muscle</b><span class="muted sm">line = last week</span></div>${muscleBars(a.muscles, b.muscles)}</div>
   ${prs ? `<div class="card"><div class="card-h"><b>Personal records</b></div>${prs}</div>` : ''}
-  <div class="card"><div class="card-h"><b>Coach notes</b>${I('sparkle')}</div>${insights(a, b, live).map(([ic, t]) => `<div class="ins"><span class="ins-ic">${I(ic)}</span><p>${t}</p></div>`).join('')}</div>`;
+  <div class="card"><div class="card-h"><b>Coach notes</b><span>✍️</span></div>${insights(a, b, live).map(([ic, t]) => `<div class="ins"><span class="ins-ic">${INS_EMOJI[ic] || '💡'}</span><p>${t}</p></div>`).join('')}</div>`;
 }
 
 /* ---------- workout engine ---------- */
@@ -689,7 +731,7 @@ function exCard(e, i) {
   const cols = x.type === 'c' ? ['MIN', dunit().toUpperCase()] : x.type === 't' ? ['SEC'] : [(x.type === 'bw' ? '+' : '') + unit().toUpperCase(), 'REPS'];
   const restTxt = e.rest != null ? ` · ${e.rest ? fmtClock(e.rest) + ' rest' : 'no rest timer'}` : '';
   return `<div class="ex-card ${e._new ? 'new' : ''}" style="--mc:${MUSCLES[x.muscle] || '#fff'}">
-    <div class="ex-head"><span class="ex-dot"></span><div class="ex-name" data-a="exInfo" data-id="${x.id}">${esc(x.name)}<small>${x.muscle} · ${esc(x.equip)}${restTxt}</small></div><button class="icon-btn sm" data-a="exMenu" data-ei="${i}">${I('dots')}</button></div>
+    <div class="ex-head">${etile(x.muscle)}<div class="ex-name" data-a="exInfo" data-id="${x.id}">${esc(x.name)}<small>${x.muscle} · ${esc(x.equip)}${restTxt}</small></div><button class="icon-btn sm" data-a="exMenu" data-ei="${i}">${I('dots')}</button></div>
     <input class="ex-note" data-f="exNote" data-ei="${i}" value="${esc(e.note)}" placeholder="Add a note">
     <div class="set-inner hdr g${cols.length}"><span>SET</span><span>PREVIOUS</span>${cols.map(c => `<span>${c}</span>`).join('')}<span>${I('check')}</span></div>
     ${e.sets.map((s, si) => setRow(x, e, s, i, si, prevFor(e, si, prev))).join('')}
@@ -818,11 +860,12 @@ function showSummary(w) {
   const st = wStats(w), prev = S.workouts.filter(o => o.id !== w.id && o.name === w.name && o.start < w.start).pop();
   const ws = weekAgg(weekStart(Date.now())), g = S.settings.goal;
   sheet(() => `<div class="summary">
-    <div class="big-check">${I('check')}</div><h2>Workout complete</h2><p class="muted">${esc(w.name)} · ${fmtDate(w.start)}</p>
+    ${barbellSVG(ws.count, g, 'lift')}
+    <h2>${w.prs.length ? 'New record day!' : 'Workout complete'}</h2><p class="muted">${esc(w.name)} · ${fmtDate(w.start)} · plate ${ws.count} of ${g} loaded</p>
     <div class="tiles t3">${tileC('Duration', st.dur, 'dur')}${tileC('Volume', st.vol, 'vol')}${tileC('Sets', st.sets, 'int')}${tileC('Reps', st.reps, 'int')}${tileC('Rest', st.rest, 'dur')}${tileC('Active', Math.max(0, st.dur - st.rest), 'dur')}</div>
     ${prev ? `<div class="cmp">Volume vs last ${esc(w.name)} ${delta(st.vol, wStats(prev).vol)}</div>` : ''}
-    ${w.prs.length ? `<div class="card"><div class="card-h"><b>New personal records</b>${I('trophy')}</div>${w.prs.map(p => `<div class="pr-row">${I('trophy')}<b>${esc(ex(p.exId).name)}</b><span>${prTxt(p)}</span></div>`).join('')}</div>` : ''}
-    <div class="card" style="display:flex;align-items:center;gap:14px"><div class="hero-ring" style="width:64px;height:64px">${ring(ws.count / g, 64, 7)}<div class="ring-c"><b style="font-size:18px">${ws.count}</b></div></div><div><b>${ws.count >= g ? 'Weekly goal reached!' : `${g - ws.count} more to hit your weekly goal`}</b><p class="muted sm">${ws.count} of ${g} workouts this week</p></div></div>
+    ${w.prs.length ? `<div class="card"><div class="card-h"><b>Personal records</b></div>${w.prs.map(p => `<div class="pr-row"><span>🏆</span><b>${esc(ex(p.exId).name)}</b><span>${prTxt(p)}</span></div>`).join('')}</div>` : ''}
+    <p class="foot" style="margin:14px 0">${heroMsg(ws.count, g)}</p>
     <button class="btn-primary" data-a="closeSheet">Done</button>
     ${!w.routineId ? `<button class="btn-ghost" data-a="saveRoutineFrom" data-id="${w.id}">Save as routine</button>` : ''}
   </div>`, { cls: 'tall' });
@@ -846,7 +889,7 @@ function pkList() {
   if (!list.length) return `<p class="muted pad">No matches. Tap <b>+ Custom</b> to create it.</p>`;
   return list.map(e => {
     const i = PK.sel.indexOf(e.id);
-    return `<div class="pk-row ${i >= 0 ? 'on' : ''}" data-a="pkTog" data-id="${e.id}" style="--mc:${MUSCLES[e.muscle]}"><span class="pk-dot"></span><div><b>${esc(e.name)}</b><small>${e.muscle} · ${esc(e.equip)}${e.custom ? ' · Custom' : ''}</small></div>${PK.mode === 'browse' ? I('right') : `<span class="pk-n">${i >= 0 ? i + 1 : ''}</span>`}</div>`;
+    return `<div class="pk-row ${i >= 0 ? 'on' : ''}" data-a="pkTog" data-id="${e.id}" >${etile(e.muscle)}<div><b>${esc(e.name)}</b><small>${e.muscle} · ${esc(e.equip)}${e.custom ? ' · Custom' : ''}</small></div>${PK.mode === 'browse' ? I('right') : `<span class="pk-n">${i >= 0 ? i + 1 : ''}</span>`}</div>`;
   }).join('');
 }
 function vCustomEx() {
@@ -903,7 +946,7 @@ function vWDetail() {
   <div class="tiles t3">${tile('Duration', fmtDur(st.dur))}${tile('Volume', fmtVol(st.vol) + ' ' + unit())}${tile('Sets', st.sets)}${tile('Reps', st.reps)}${tile('Rest', fmtDur(st.rest))}${tile('PRs', (w.prs || []).length)}</div>
   ${w.exercises.map(e => {
     const x = ex(e.exId);
-    return `<div class="card d-ex" style="--mc:${MUSCLES[x.muscle]}"><div class="ex-head"><span class="ex-dot"></span><div class="ex-name" data-a="exInfo" data-id="${x.id}">${esc(x.name)}<small>${x.muscle}</small></div></div>${e.note ? `<p class="muted sm" style="padding:0 4px 6px">${esc(e.note)}</p>` : ''}
+    return `<div class="card d-ex"><div class="ex-head">${etile(x.muscle, 'sm')}<div class="ex-name" data-a="exInfo" data-id="${x.id}">${esc(x.name)}<small>${x.muscle}</small></div></div>${e.note ? `<p class="muted sm" style="padding:0 4px 6px">${esc(e.note)}</p>` : ''}
     ${e.sets.map((s, i) => `<div class="d-set ${s.pr ? 'pr' : ''}"><span class="set-type t-${s.t}">${setLabel(e, i)}</span><b>${setTxt(x, s)}</b>${x.type === 'w' && s.w && s.r ? `<small>e1RM ${fmtW(e1rm(s.w, s.r))}</small>` : ''}${s.pr ? I('trophy') : ''}</div>`).join('')}</div>`;
   }).join('')}
   ${w.notes ? `<div class="card"><small class="muted">Notes</small><p>${esc(w.notes)}</p></div>` : ''}
@@ -930,7 +973,7 @@ function vRoutineEd() {
   <label class="field"><span>Name</span><input class="inp" data-f="reName" value="${esc(RE.name)}" placeholder="e.g. Upper Body A" maxlength="40"></label>
   <div>${RE.items.map((it, i) => {
     const x = ex(it.exId);
-    return `<div class="re-item" style="--mc:${MUSCLES[x.muscle]}"><span class="ex-dot"></span><div class="re-n"><b>${esc(x.name)}</b><small>${it.sets} set${it.sets > 1 ? 's' : ''} · ${x.muscle}</small></div>
+    return `<div class="re-item">${etile(x.muscle, 'sm')}<div class="re-n"><b>${esc(x.name)}</b><small>${it.sets} set${it.sets > 1 ? 's' : ''} · ${x.muscle}</small></div>
       <div class="stp"><button data-a="reSets" data-i="${i}" data-d="-1">${I('minus')}</button><span style="min-width:20px">${it.sets}</span><button data-a="reSets" data-i="${i}" data-d="1">${I('plus')}</button></div>
       <div class="re-mv"><button data-a="reMove" data-i="${i}" data-d="-1" ${i ? '' : 'disabled'}>${I('up')}</button><button data-a="reMove" data-i="${i}" data-d="1" ${i < RE.items.length - 1 ? '' : 'disabled'}>${I('down')}</button></div>
       <button class="icon-btn sm danger" data-a="reDel" data-i="${i}">${I('x')}</button></div>`;
@@ -977,7 +1020,7 @@ function ormOut() {
   if (!w || !r) return '<p class="muted pad">Enter a weight and the reps you managed.</p>';
   const m = e1rm(w, r);
   return `<div class="orm-big"><small>Estimated 1RM</small><b>${fmtN(m)}</b><i>${unit()}</i></div>
-  <div class="card list" style="padding:0">${[100, 95, 90, 85, 80, 75, 70, 65, 60].map(p => `<div class="pct-row"><span>${p}%</span><b>${fmtN(m * p / 100)} ${unit()}</b><small>~${p === 100 ? 1 : Math.round(30 * (100 / p - 1))} reps</small></div>`).join('')}</div>`;
+  <div class="list">${[100, 95, 90, 85, 80, 75, 70, 65, 60].map(p => `<div class="pct-row"><span>${p}%</span><b>${fmtN(m * p / 100)} ${unit()}</b><small>~${p === 100 ? 1 : Math.round(30 * (100 / p - 1))} reps</small></div>`).join('')}</div>`;
 }
 
 /* ---------- data ---------- */
@@ -998,6 +1041,42 @@ function exportCsv() {
   ]));
   const csv = rows.map(r => r.map(v => { v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(',')).join('\n');
   shareFile(csv, `forge-${dayKey(Date.now())}.csv`, 'text/csv');
+}
+
+/* ---------- theme & onboarding ---------- */
+function applyTheme() {
+  const t = S.settings.theme, root = document.documentElement;
+  if (t === 'light' || t === 'dark') root.dataset.theme = t; else delete root.dataset.theme;
+  $$('meta[name="theme-color"]').forEach(m => { m.content = t === 'dark' ? '#0F1311' : t === 'light' ? '#F2EEE4' : (m.media.includes('dark') ? '#0F1311' : '#F2EEE4'); });
+}
+const OB = { step: 0 };
+function renderOnboard() {
+  const s = S.settings, dots = [0, 1, 2].map(i => `<i class="${i === OB.step ? 'on' : ''}"></i>`).join('');
+  const back = `<button class="btn-ghost" data-a="obBack" aria-label="Back">‹</button>`;
+  const ms = (k, opts) => `<div class="mseg">${opts.map(v => `<button class="${s[k] === v ? 'on' : ''}" data-a="obUnit" data-k="${k}" data-v="${v}">${v}</button>`).join('')}</div>`;
+  const steps = [
+    () => `<div class="ob-hero">${barbellSVG(7, 7)}</div>
+      <h1 class="ob-title">Lift. Log.<br><em>Level up.</em></h1>
+      <p class="ob-text">Forge tracks every set, rest and run, then tells you <b>how your week stacked up</b>. Free, private, and it lives on your phone.</p>
+      <div class="ob-actions"><button class="btn-primary big" data-a="obNext">Let's go</button></div>`,
+    () => `<h1 class="ob-title">First, the <em>basics.</em></h1>
+      <label class="field"><span>What should we call you?</span><input class="inp" data-f="name" value="${esc(s.name)}" placeholder="Your name" maxlength="24" autocomplete="given-name"></label>
+      <div class="list"><div class="row"><span class="row-ic">⚖️</span><span class="row-l">Weights in</span>${ms('unit', ['kg', 'lb'])}</div><div class="row"><span class="row-ic">📏</span><span class="row-l">Distance in</span>${ms('dist', ['km', 'mi'])}</div></div>
+      <div class="ob-actions">${back}<button class="btn-primary" data-a="obNext">Continue</button></div>`,
+    () => `<h1 class="ob-title">How often will you <em>train?</em></h1>
+      <p class="ob-text">Each workout loads a plate on your bar. Fill the bar to hit your weekly goal.</p>
+      <div class="goal-grid">${[2, 3, 4, 5, 6, 7].map(n => `<button class="${s.goal === n ? 'on' : ''}" data-a="obGoal" data-v="${n}">${n}</button>`).join('')}</div>
+      <div class="ob-hero" style="margin-top:18px">${barbellSVG(s.goal, s.goal)}</div>
+      <div class="ob-actions">${back}<button class="btn-primary lime" data-a="obDone">Start training</button></div>`,
+  ];
+  $('#onboard').innerHTML = `<div class="ob-dots">${dots}</div><div class="ob-step ${OB.shown !== OB.step ? 'anim' : ''}">${steps[OB.step]()}</div>`;
+  OB.shown = OB.step;
+}
+function finishOnboard() {
+  S.settings.onboarded = true; saveNow(); Haptic.success();
+  const ob = $('#onboard'); ob.classList.add('leaving');
+  render(true);
+  setTimeout(() => { document.body.classList.remove('onboarding'); ob.classList.remove('leaving'); ob.innerHTML = ''; }, 480);
 }
 
 /* ---------- actions ---------- */
@@ -1044,7 +1123,7 @@ const ACT = {
       const e = S.active.exercises[ei]; if (!e) return '';
       const x = ex(e.exId), cur = e.rest != null ? e.rest : (x.type === 'c' ? 0 : S.settings.rest);
       return `${sheetHead(esc(x.name), x.muscle)}
-      <div class="card list" style="padding:0">${row('chart', 'History & records', '', 'exInfo', `data-id="${x.id}"`)}${x.type === 'w' ? row('flame', 'Add warm-up sets', '', 'warmup', `data-ei="${ei}"`) : ''}${ei > 0 ? row('up', 'Move up', '', 'exMove', `data-ei="${ei}" data-d="-1"`) : ''}${ei < S.active.exercises.length - 1 ? row('down', 'Move down', '', 'exMove', `data-ei="${ei}" data-d="1"`) : ''}${row('swap', 'Replace exercise', '', 'exReplace', `data-ei="${ei}"`)}${row('trash', '<span class="danger">Remove exercise</span>', '', 'exRemove', `data-ei="${ei}"`)}</div>
+      <div class="list">${row('chart', 'History & records', '', 'exInfo', `data-id="${x.id}"`)}${x.type === 'w' ? row('flame', 'Add warm-up sets', '', 'warmup', `data-ei="${ei}"`) : ''}${ei > 0 ? row('up', 'Move up', '', 'exMove', `data-ei="${ei}" data-d="-1"`) : ''}${ei < S.active.exercises.length - 1 ? row('down', 'Move down', '', 'exMove', `data-ei="${ei}" data-d="1"`) : ''}${row('swap', 'Replace exercise', '', 'exReplace', `data-ei="${ei}"`)}${row('trash', '<span class="danger">Remove exercise</span>', '', 'exRemove', `data-ei="${ei}"`)}</div>
       <div class="field"><span>Rest timer for this exercise</span><div class="chips wrap">${[0, 30, 60, 90, 120, 150, 180, 240, 300].map(s => `<button class="chip ${cur === s ? 'on' : ''}" data-a="exRest" data-ei="${ei}" data-v="${s}">${s ? fmtClock(s) : 'Off'}</button>`).join('')}</div></div>`;
     });
   },
@@ -1150,7 +1229,13 @@ const ACT = {
   orm: () => sheet(vOrm),
   // settings
   toggle: a => { const k = a.dataset.k; S.settings[k] = !S.settings[k]; a.classList.toggle('on', S.settings[k]); save(); if (k === 'wake') S.settings.wake ? wake() : releaseWake(); },
-  setOpt: a => { S.settings[a.dataset.k] = a.dataset.v; save(); render(); if (S.active) renderWorkout(); },
+  setOpt: a => { S.settings[a.dataset.k] = a.dataset.v; save(); if (a.dataset.k === 'theme') applyTheme(); render(); if (S.active) renderWorkout(); },
+  lift: a => { const bb = $('.bb', a); if (!bb) return; bb.classList.remove('lift'); void bb.getBoundingClientRect(); bb.classList.add('lift'); setTimeout(() => Haptic.light(), 220); },
+  obNext: () => { OB.step++; renderOnboard(); },
+  obBack: () => { OB.step--; renderOnboard(); },
+  obUnit: a => { S.settings[a.dataset.k] = a.dataset.v; save(); renderOnboard(); },
+  obGoal: a => { S.settings.goal = +a.dataset.v; save(); renderOnboard(); },
+  obDone: () => finishOnboard(),
   step: a => {
     const k = a.dataset.k, d = +a.dataset.d;
     if (k === 'rest') S.settings.rest = clamp(S.settings.rest + d * 15, 0, 600);
@@ -1160,7 +1245,7 @@ const ACT = {
   exportJson: () => shareFile(JSON.stringify({ app: 'forge', exported: new Date().toISOString(), data: S }), `forge-backup-${dayKey(Date.now())}.json`, 'application/json'),
   exportCsv: () => exportCsv(),
   importJson: () => $('#importFile').click(),
-  reset: () => confirmSheet('Erase everything?', 'All workouts, routines and body weight entries will be deleted from this device. Export a backup first if unsure.', 'Erase all data', () => { S = defaults(); rebuildEx(); saveNow(); releaseWake(); $('#workout').classList.remove('open'); render(true); toast('All data erased', 'trash'); }, true),
+  reset: () => confirmSheet('Erase everything?', 'All workouts, routines and body weight entries will be deleted from this device. Export a backup first if unsure.', 'Erase all data', () => { S = defaults(); rebuildEx(); saveNow(); releaseWake(); $('#workout').classList.remove('open'); applyTheme(); render(true); OB.step = 0; document.body.classList.add('onboarding'); renderOnboard(); }, true),
 };
 
 const INPUTS = {
@@ -1216,8 +1301,11 @@ document.addEventListener('visibilitychange', () => {
 
 /* ---------- boot ---------- */
 rebuildEx();
+applyTheme();
+if (!S.settings.onboarded && S.workouts.length) { S.settings.onboarded = true; save(); }
 render(true);
-if (S.active) openWorkout();
+if (!S.settings.onboarded) { document.body.classList.add('onboarding'); renderOnboard(); }
+else if (S.active) openWorkout();
 setInterval(tick, 250);
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => { }));

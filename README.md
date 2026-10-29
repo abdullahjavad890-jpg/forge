@@ -38,6 +38,8 @@ Go to **More > Export backup** and save the file to iCloud Drive or Files. To re
 - **Weekly review:** a grade out of 100, a comparison with last week (workouts, time, volume, sets, cardio, rest), minutes per day, sets per muscle, PRs and coach notes. You can browse back through past weeks
 - **Progress:** weekly volume chart, 18-week heatmap, muscle split, body weight trend with a 7-entry average
 - **Tools:** plate calculator and 1RM / percentage calculator
+- **Look:** warm paper design with Fraunces serif type, automatic light and dark mode, and a barbell on the home screen that loads a bumper plate for every workout you finish this week (tap it to lift)
+- **Onboarding:** a three-step welcome that sets your name, units and weekly goal
 - **Feel:** haptics, sounds, spring animations, the screen stays awake during workouts, swipe left to delete a set, kg/lb and km/mi
 - **65 built-in exercises** plus your own custom ones
 
