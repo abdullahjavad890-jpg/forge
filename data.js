@@ -1,12 +1,14 @@
 // Built-in exercise library and starter routines.
 // type: w = weight x reps, bw = bodyweight reps (+ optional added weight), c = cardio (time + distance), t = timed hold
+// extra (cardio only): inc = incline %, lvl = resistance / level
 const MUSCLES = {
   Chest: '#E5577A', Back: '#3F6FE0', Shoulders: '#EE8A2C', Arms: '#9B5DE5',
   Legs: '#26A272', Core: '#D4A90A', Cardio: '#1AA3C9',
 };
 const MEMOJI = { Chest: '🏋️', Back: '🧗', Shoulders: '🤸', Arms: '💪', Legs: '🦵', Core: '🧘', Cardio: '🏃' };
 const PLATE_COLORS = ['#E5483B', '#3F6FE0', '#E8B419', '#2BA676', '#9B5DE5', '#F08C2E', '#19A7CE'];
-const TYPES ={ w: 'Weight & reps', bw: 'Bodyweight', c: 'Cardio', t: 'Timed' };
+const TYPES = { w: 'Weight & reps', bw: 'Bodyweight', c: 'Cardio', t: 'Timed' };
+const EXTRAS = { inc: { col: 'INCL %', label: 'Incline', unit: '%', max: 40 }, lvl: { col: 'LEVEL', label: 'Level', unit: '', max: 30 } };
 
 const EXERCISES = [
   ['bench', 'Bench Press', 'Chest', 'Barbell', 'w'],
@@ -64,17 +66,17 @@ const EXERCISES = [
   ['russian-twist', 'Russian Twist', 'Core', 'Bodyweight', 'bw'],
   ['crunch', 'Crunch', 'Core', 'Bodyweight', 'bw'],
   ['run', 'Running', 'Cardio', 'Outdoor', 'c'],
-  ['treadmill', 'Treadmill', 'Cardio', 'Machine', 'c'],
+  ['treadmill', 'Treadmill', 'Cardio', 'Machine', 'c', 'inc'],
   ['cycling', 'Cycling', 'Cardio', 'Outdoor', 'c'],
-  ['bike', 'Stationary Bike', 'Cardio', 'Machine', 'c'],
-  ['rower', 'Rowing Machine', 'Cardio', 'Machine', 'c'],
-  ['elliptical', 'Elliptical', 'Cardio', 'Machine', 'c'],
-  ['stairs', 'Stair Climber', 'Cardio', 'Machine', 'c'],
+  ['bike', 'Stationary Bike', 'Cardio', 'Machine', 'c', 'lvl'],
+  ['rower', 'Rowing Machine', 'Cardio', 'Machine', 'c', 'lvl'],
+  ['elliptical', 'Elliptical', 'Cardio', 'Machine', 'c', 'lvl'],
+  ['stairs', 'Stair Climber', 'Cardio', 'Machine', 'c', 'lvl'],
   ['walk', 'Walking', 'Cardio', 'Outdoor', 'c'],
   ['jump-rope', 'Jump Rope', 'Cardio', 'Other', 'c'],
   ['swim', 'Swimming', 'Cardio', 'Pool', 'c'],
   ['hiit', 'HIIT', 'Cardio', 'Other', 'c'],
-].map(([id, name, muscle, equip, type]) => ({ id, name, muscle, equip, type }));
+].map(([id, name, muscle, equip, type, extra]) => ({ id, name, muscle, equip, type, extra: extra || null }));
 
 const ROUTINE_SEED = [
   { name: 'Push', items: [['bench', 4], ['incline-db', 3], ['ohp', 3], ['lateral-raise', 3], ['pushdown', 3]] },
